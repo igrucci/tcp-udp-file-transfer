@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	fmt.Println("host tcp udp filepath time")
+
 	input := bufio.NewScanner(os.Stdin)
 	input.Split(bufio.ScanWords)
 
@@ -23,6 +25,8 @@ func main() {
 
 	input.Scan()
 	udpPort := input.Text()
+
+	udpPortLen := len(udpPort)
 
 	input.Scan()
 	filePath := input.Text()
@@ -41,10 +45,14 @@ func main() {
 		log.Println("Error dialing tcp ", err)
 		return
 	}
+
 	defer tcpConn.Close()
 
-	_, err = tcpConn.Write([]byte(udpPort + fileName))
-	if err != nil {
+	udpPortLenBytes := []byte{byte(udpPortLen)}
+	data := append(udpPortLenBytes, []byte(udpPort)...)
+	data = append(data, []byte(fileName)...)
+
+	if _, err := tcpConn.Write(data); err != nil {
 		log.Println("Error writing to tcp ", err)
 		return
 	}
@@ -64,12 +72,13 @@ func main() {
 
 	defer udpConn.Close()
 
-	buf := make([]byte, 100)
+	buf := make([]byte, 200)
 
 	packetID := 1
 
 	for {
 		bytesFile, err := file.Read(buf)
+
 		if err != nil {
 			if err.Error() == "EOF" {
 				break
@@ -79,17 +88,28 @@ func main() {
 		}
 
 		packet := append([]byte(fmt.Sprintf("%d:", packetID)), buf[:bytesFile]...)
-		log.Println(packet, packetID)
+
+		log.Println("send", packet, packetID)
 		_, err = udpConn.Write(packet)
+
 		if err != nil {
 			log.Println("Error writing to udp", err)
 			return
 		}
 
-		timeout := time.After(time.Duration(timeForApprove) * time.Millisecond)
+		chanConf := make(chan interface{}, 1)
+		go func() {
+			confirmation := make([]byte, 1024)
+			_, err = tcpConn.Read(confirmation)
+			if err != nil {
+				log.Println("Error reading tcp ", err)
+				return
+			}
+			chanConf <- string(confirmation)
 
+		}()
 		select {
-		case <-timeout:
+		case <-time.After(time.Duration(timeForApprove) * time.Millisecond):
 
 			packet := append([]byte(fmt.Sprintf("%d:", packetID)), buf[:bytesFile]...)
 			_, err = udpConn.Write(packet)
@@ -99,14 +119,8 @@ func main() {
 			}
 			log.Println("send again ", packetID)
 
-		default:
-			confirmation := make([]byte, 1024)
-			_, err = tcpConn.Read(confirmation)
-			if err != nil {
-				log.Println("Error reading tcp ", err)
-				return
-			}
-			log.Println(string(confirmation))
+		case _ = <-chanConf:
+			log.Println("packet ", packetID, "delivered")
 		}
 
 		packetID++
