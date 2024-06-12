@@ -22,7 +22,6 @@ func handleTCPConn(c net.Conn) {
 		log.Println("Error reading from tcp", err)
 		return
 	}
-
 }
 
 func handleUDPConn(udpPort string, tcpConn net.Conn, fileName string) {
@@ -66,22 +65,30 @@ func handleUDPConn(udpPort string, tcpConn net.Conn, fileName string) {
 		}
 		packet := buf[:n]
 
-		parts := strings.Split(string(packet), ":")
-		packetId, err := strconv.Atoi(parts[0])
+		var packetId int
+
+		parts := strings.SplitN(string(packet), ":", 2)
+		packetId, err = strconv.Atoi(parts[0])
 		if err != nil {
 			log.Println("Error parsing id:", err)
 			continue
 		}
 		data := parts[1]
 
-		log.Println("Received udp packet  : id:", packetId, data)
+		if getFileExtension(fileName) == "txt" {
+			_, err = file.WriteString(data)
+			if err != nil {
+				log.Println("Error writing to file:", err)
+			}
 
-		_, err = file.WriteString(data)
-
-		if err != nil {
-			log.Println("Error writing to file:", err)
-			return
+		} else {
+			_, err = file.Write([]byte(data))
+			if err != nil {
+				log.Println("Error writing to file:", err)
+			}
 		}
+
+		log.Println("Received udp packet  : id:", packetId, data)
 
 		_, err = tcpConn.Write([]byte("received"))
 		if err != nil {
@@ -89,6 +96,11 @@ func handleUDPConn(udpPort string, tcpConn net.Conn, fileName string) {
 			return
 		}
 	}
+}
+
+func getFileExtension(fileName string) string {
+	parts := strings.Split(fileName, ".")
+	return parts[len(parts)-1]
 }
 
 func main() {
@@ -136,4 +148,5 @@ func main() {
 		go handleUDPConn(udpPort, tcpConn, fileName)
 
 	}
+
 }

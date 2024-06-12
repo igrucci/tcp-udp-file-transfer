@@ -78,7 +78,6 @@ func main() {
 
 	for {
 		bytesFile, err := file.Read(buf)
-
 		if err != nil {
 			if err.Error() == "EOF" {
 				break
@@ -86,7 +85,6 @@ func main() {
 			log.Println("Error reading file ", err)
 			return
 		}
-
 		packet := append([]byte(fmt.Sprintf("%d:", packetID)), buf[:bytesFile]...)
 
 		log.Println("send", packet, packetID)
@@ -124,6 +122,5 @@ func main() {
 		}
 
 		packetID++
-
 	}
 }
